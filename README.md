@@ -76,5 +76,28 @@ Error shape is always `{ error: { code, message, details? } }`. Status codes: 20
 - **Frontend Server Components fetch the API over HTTP** (not direct Prisma), keeping the architecture honest about the data path even when both apps share a host.
 - **URL is the source of truth for filter and search state.** Refresh preserves state, sharing a link preserves state, back/forward works.
 
+## Deployment
+
+### Database (Supabase)
+1. Create a project at https://supabase.com
+2. Copy the **Connection string** (Settings -> Database -> Connection pooling, mode `Transaction`) into `DATABASE_URL`
+3. Run migrations against it: `DATABASE_URL=... pnpm --filter @leadflow/db migrate:deploy`
+4. Seed (optional): `DATABASE_URL=... pnpm seed`
+
+### Backend (Render)
+1. Connect this repo at https://render.com via "New Blueprint" - it auto-detects `render.yaml`
+2. Fill in the secrets prompted by `sync: false` env vars: `DATABASE_URL`, `GROQ_API_KEY`, `FAST2SMS_API_KEY`
+3. Deploy. Health check hits `/health`.
+4. (Recommended) Set up a free [UptimeRobot](https://uptimerobot.com) monitor pinging `/health` every 5 minutes so the free dyno never cold-starts during the day.
+
+### Frontend (Vercel)
+1. Import this repo at https://vercel.com
+2. Set the **Root Directory** to `apps/web` (or rely on `vercel.json` and leave at repo root - both work)
+3. Add env vars:
+   - `NEXT_PUBLIC_API_URL` = your Render API URL (e.g., `https://leadflow-api.onrender.com`)
+   - `API_INTERNAL_URL` = same as above (used by Server Components)
+   - `NEXT_PUBLIC_DEV_USER_ID` = (temporary) the seeded demo user id while real auth is being wired up
+4. Deploy.
+
 ## License
 All rights reserved by Abhimanyu Singh.
