@@ -1,13 +1,14 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pin, TrendingUp, Search, X } from 'lucide-react';
+import { Pin, TrendingUp, Search, X, Settings as SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FilterChips, type FilterValue } from '@/components/filter-chips';
 import { LeadCard, type LeadCardData } from '@/components/lead-card';
 import { LeadTimelineDialog } from '@/components/lead-timeline-dialog';
 import { AddLeadDialog } from '@/components/add-lead-dialog';
+import { SettingsDialog } from '@/components/settings-dialog';
 import { isToday } from '@/lib/format';
 
 export function LeadListClient({
@@ -25,6 +26,7 @@ export function LeadListClient({
   const [query, setQuery] = useState(initialQuery);
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Debounce search input -> URL update -> server re-fetch.
   useEffect(() => {
@@ -62,7 +64,17 @@ export function LeadListClient({
             <TrendingUp className="h-6 w-6" />
             <span>LeadFlow</span>
           </div>
-          <Button onClick={() => setAddOpen(true)}>+ Add New Lead</Button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+              className="rounded-md p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            >
+              <SettingsIcon className="h-5 w-5" />
+            </button>
+            <Button onClick={() => setAddOpen(true)}>+ Add New Lead</Button>
+          </div>
         </div>
       </header>
 
@@ -148,6 +160,8 @@ export function LeadListClient({
       />
 
       <AddLeadDialog open={addOpen} onOpenChange={setAddOpen} />
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

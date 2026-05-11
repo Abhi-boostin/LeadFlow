@@ -45,3 +45,12 @@ export const CreateDiscussionSchema = z.object({
   followUpAt: z.coerce.date().nullable().optional(),
 });
 export type CreateDiscussionInput = z.infer<typeof CreateDiscussionSchema>;
+
+export const UpdateUserSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  summarizationPrompt: z.string().min(1).max(2000).optional(),
+  smsNumber: z.string().max(30).nullable().optional(),
+  smsOptIn: z.boolean().optional(),
+  timezone: z.string().max(64).optional(),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
