@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { FilterChips, type FilterValue } from '@/components/filter-chips';
 import { LeadCard, type LeadCardData } from '@/components/lead-card';
 import { LeadTimelineDialog } from '@/components/lead-timeline-dialog';
+import { AddLeadDialog } from '@/components/add-lead-dialog';
 import { isToday } from '@/lib/format';
 
 export function LeadListClient({
@@ -23,6 +24,7 @@ export function LeadListClient({
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   // Debounce search input -> URL update -> server re-fetch.
   useEffect(() => {
@@ -60,7 +62,7 @@ export function LeadListClient({
             <TrendingUp className="h-6 w-6" />
             <span>LeadFlow</span>
           </div>
-          <Button>+ Add New Lead</Button>
+          <Button onClick={() => setAddOpen(true)}>+ Add New Lead</Button>
         </div>
       </header>
 
@@ -144,6 +146,8 @@ export function LeadListClient({
           if (!o) setOpenLeadId(null);
         }}
       />
+
+      <AddLeadDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
   );
 }
