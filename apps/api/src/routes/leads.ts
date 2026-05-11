@@ -1,5 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { CreateLeadSchema, ListLeadsQuerySchema } from '@leadflow/shared';
+import {
+  CreateLeadSchema,
+  ListLeadsQuerySchema,
+  UpdateLeadSchema,
+  UuidParamSchema,
+} from '@leadflow/shared';
 import { prisma, Prisma } from '@leadflow/db';
 
 export async function leadsRoutes(app: FastifyInstance) {
@@ -81,5 +86,59 @@ export async function leadsRoutes(app: FastifyInstance) {
     });
 
     return reply.status(201).send({ lead });
+  });
+
+  // GET /api/v1/leads/:id
+  // Returns the lead plus its full discussion timeline (reverse chronological).
+  app.get('/api/v1/leads/:id', async (request, reply) => {
+    const { id } = UuidParamSchema.parse(request.params);
+    const userId = request.userId;
+
+    const lead = await prisma.lead.findFirst({
+      where: { id, userId },
+      include: {
+        discussions: {
+          orderBy: { createdAt: 'desc' },
+          include: { transcription: { select: { id: true, durationSeconds: true } } },
+        },
+      },
+    });
+
+    if (!lead) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Lead not found' },
+      });
+    }
+
+    return reply.send({ lead });
+  });
+
+  // PATCH /api/v1/leads/:id
+  // Partial update: any of name, company, phone, status.
+  app.patch('/api/v1/leads/:id', async (request, reply) => {
+    const { id } = UuidParamSchema.parse(request.params);
+    const body = UpdateLeadSchema.parse(request.body);
+    const userId = request.userId;
+
+    // Verify the lead belongs to the requesting user before mutating.
+    // Same 404 response for missing vs cross-user lookup avoids enumeration.
+    const existing = await prisma.lead.findFirst({ where: { id, userId } });
+    if (!existing) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Lead not found' },
+      });
+    }
+
+    const lead = await prisma.lead.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined && { name: body.name }),
+        ...(body.company !== undefined && { company: body.company }),
+        ...(body.phone !== undefined && { phone: body.phone }),
+        ...(body.status !== undefined && { status: body.status }),
+      },
+    });
+
+    return reply.send({ lead });
   });
 }

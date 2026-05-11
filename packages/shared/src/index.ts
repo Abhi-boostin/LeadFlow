@@ -27,3 +27,15 @@ export const ListLeadsQuerySchema = z.object({
   followUp: z.enum(['today', 'overdue', 'upcoming']).optional(),
 });
 export type ListLeadsQuery = z.infer<typeof ListLeadsQuerySchema>;
+
+export const UpdateLeadSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  company: z.string().max(100).nullable().optional(),
+  phone: z.string().max(30).nullable().optional(),
+  status: LeadStatusSchema.optional(),
+});
+export type UpdateLeadInput = z.infer<typeof UpdateLeadSchema>;
+
+export const UuidParamSchema = z.object({
+  id: z.string().uuid(),
+});
