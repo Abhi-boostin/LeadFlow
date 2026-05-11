@@ -8,6 +8,9 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url().optional(),
   AUTH_SECRET: z.string().min(1).default('dev-secret-change-me'),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_SUMMARY_MODEL: z.string().default('llama-3.3-70b-versatile'),
+  GROQ_TRANSCRIBE_MODEL: z.string().default('whisper-large-v3'),
 });
 
 const parsed = schema.safeParse(process.env);

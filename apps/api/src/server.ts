@@ -6,6 +6,7 @@ import { registerErrorHandler } from './plugins/error-handler.js';
 import { registerStubAuth } from './plugins/auth.js';
 import { healthRoutes } from './routes/health.js';
 import { leadsRoutes } from './routes/leads.js';
+import { discussionsRoutes } from './routes/discussions.js';
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -32,6 +33,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   await app.register(healthRoutes);
   await app.register(leadsRoutes);
+  await app.register(discussionsRoutes);
 
   return app;
 }
