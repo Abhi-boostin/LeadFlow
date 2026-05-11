@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+
+# Production builds
+build/
+dist/
+
+# Env files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Prisma
+prisma/migrations/dev.db*
+*.sqlite
+*.sqlite-journal
+
+# Coverage and tests
+coverage/
+*.lcov
+.nyc_output/
+
+# Temp
+tmp/
+.tmp/
+*.tmp
+
+# Turbo / Nx / build caches
+.turbo/
+.cache/
+
+# Local planning docs and notes (private, not for the public repo)
+plans/
+
+# Agent state
+.claude/
