@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,10 +56,13 @@ export function AddLeadDialog({
         method: 'POST',
         body: JSON.stringify(parsed.data),
       });
+      toast.success(`Added ${parsed.data.name}`);
       onOpenChange(false);
       startTransition(() => router.refresh());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create lead');
+      const message = err instanceof Error ? err.message : 'Failed to create lead';
+      setError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }

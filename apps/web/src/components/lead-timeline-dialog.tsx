@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Bell, Check, ChevronDown, Phone } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -111,11 +112,14 @@ export function LeadTimelineDialog({
         method: 'PATCH',
         body: JSON.stringify({ status: next }),
       });
+      toast.success(`Status: ${STATUS_LABELS[next]}`);
       startTransition(() => router.refresh());
     } catch (e) {
       // Rollback.
       setLead({ ...lead, status: previous });
-      setError(e instanceof Error ? e.message : 'Status update failed');
+      const message = e instanceof Error ? e.message : 'Status update failed';
+      setError(message);
+      toast.error(message);
     }
   };
 
@@ -154,9 +158,12 @@ export function LeadTimelineDialog({
       setFollowUpEnabled(false);
       setFollowUpDate('');
       setFollowUpTime('09:00');
+      toast.success(followUpAt ? 'Note saved, follow-up set' : 'Note saved');
       startTransition(() => router.refresh());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save note');
+      const message = err instanceof Error ? err.message : 'Failed to save note';
+      setError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
