@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  CreateDiscussionSchema,
   CreateLeadSchema,
   ListLeadsQuerySchema,
   UpdateLeadSchema,
@@ -140,5 +141,47 @@ export async function leadsRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ lead });
+  });
+
+  // POST /api/v1/leads/:id/discussions
+  // Creates a discussion and, in the same transaction, updates the parent lead's
+  // denormalised `lastDiscussionAt` (always) and `nextFollowUpAt` (only if a date was set).
+  app.post('/api/v1/leads/:id/discussions', async (request, reply) => {
+    const { id: leadId } = UuidParamSchema.parse(request.params);
+    const body = CreateDiscussionSchema.parse(request.body);
+    const userId = request.userId;
+
+    const lead = await prisma.lead.findFirst({ where: { id: leadId, userId } });
+    if (!lead) {
+      return reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: 'Lead not found' },
+      });
+    }
+
+    const now = new Date();
+    const followUp = body.followUpAt ?? null;
+
+    const [discussion] = await prisma.$transaction([
+      prisma.discussion.create({
+        data: {
+          leadId,
+          userId,
+          note: body.note,
+          followUpAt: followUp,
+          source: 'MANUAL',
+        },
+      }),
+      prisma.lead.update({
+        where: { id: leadId },
+        data: {
+          lastDiscussionAt: now,
+          // Only overwrite the lead-level follow-up if the new discussion sets one.
+          // A discussion logged without a follow-up date does not clear an existing one.
+          ...(followUp ? { nextFollowUpAt: followUp } : {}),
+        },
+      }),
+    ]);
+
+    return reply.status(201).send({ discussion });
   });
 }

@@ -39,3 +39,9 @@ export type UpdateLeadInput = z.infer<typeof UpdateLeadSchema>;
 export const UuidParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const CreateDiscussionSchema = z.object({
+  note: z.string().min(1, 'Note cannot be empty').max(10000),
+  followUpAt: z.coerce.date().nullable().optional(),
+});
+export type CreateDiscussionInput = z.infer<typeof CreateDiscussionSchema>;
