@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FilterChips, type FilterValue } from '@/components/filter-chips';
 import { LeadCard, type LeadCardData } from '@/components/lead-card';
+import { LeadTimelineDialog } from '@/components/lead-timeline-dialog';
 import { isToday } from '@/lib/format';
 
 export function LeadListClient({
@@ -21,6 +22,7 @@ export function LeadListClient({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
 
   // Debounce search input -> URL update -> server re-fetch.
   useEffect(() => {
@@ -115,7 +117,7 @@ export function LeadListClient({
             </h2>
             <div className="space-y-3">
               {todayLeads.map((l) => (
-                <LeadCard key={l.id} lead={l} />
+                <LeadCard key={l.id} lead={l} onClick={(id) => setOpenLeadId(id)} />
               ))}
             </div>
           </section>
@@ -128,12 +130,20 @@ export function LeadListClient({
             </h2>
             <div className="space-y-3">
               {otherLeads.map((l) => (
-                <LeadCard key={l.id} lead={l} />
+                <LeadCard key={l.id} lead={l} onClick={(id) => setOpenLeadId(id)} />
               ))}
             </div>
           </section>
         )}
       </main>
+
+      <LeadTimelineDialog
+        leadId={openLeadId}
+        open={openLeadId !== null}
+        onOpenChange={(o) => {
+          if (!o) setOpenLeadId(null);
+        }}
+      />
     </div>
   );
 }
