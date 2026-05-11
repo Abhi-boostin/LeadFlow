@@ -92,13 +92,15 @@ model Transcription {
   id              String     @id @default(uuid()) @db.Uuid
   discussionId    String     @unique @db.Uuid
   discussion      Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-  audioUrl        String
+  // null until we wire up object storage (Supabase / R2). Whisper transcript is preserved
+  // separately in `rawTranscript`, so the audio file itself is optional.
+  audioUrl        String?
   rawTranscript   String     @db.Text
   summary         String     @db.Text
   // Snapshot of the user's summarisation prompt at the moment this summary was generated.
   promptUsed      String     @db.Text
   model           String
-  durationSeconds Int
+  durationSeconds Int        @default(0)
   createdAt       DateTime   @default(now())
 }
 

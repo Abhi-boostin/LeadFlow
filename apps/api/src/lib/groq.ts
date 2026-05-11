@@ -32,7 +32,10 @@ export async function summariseText(text: string, systemPrompt: string): Promise
   return content.trim();
 }
 
-export async function transcribeAudio(audio: Buffer, filename: string): Promise<string> {
+export async function transcribeAudio(
+  audio: Buffer,
+  filename: string,
+): Promise<{ text: string; duration: number }> {
   const groq = client();
   // Groq SDK accepts a Web File / Blob for the file parameter.
   const file = new File([audio], filename, { type: 'audio/webm' });
@@ -43,9 +46,12 @@ export async function transcribeAudio(audio: Buffer, filename: string): Promise<
     temperature: 0,
   });
 
-  const text = (transcription as unknown as { text?: string }).text;
-  if (!text) throw new Error('Groq returned no transcription');
-  return text.trim();
+  const result = transcription as unknown as { text?: string; duration?: number };
+  if (!result.text) throw new Error('Groq returned no transcription');
+  return {
+    text: result.text.trim(),
+    duration: Math.round(result.duration ?? 0),
+  };
 }
 
 export function isGroqConfigured(): boolean {
