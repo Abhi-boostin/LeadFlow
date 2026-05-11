@@ -1,4 +1,20 @@
-// Re-exports the singleton Prisma client. Both apps/web and apps/api import from here.
-// The actual client instantiation is added alongside the Prisma schema in commit #3.
+import { PrismaClient } from '@prisma/client';
 
-export {};
+declare global {
+  // eslint-disable-next-line no-var
+  var __leadflowPrisma: PrismaClient | undefined;
+}
+
+// Singleton pattern: avoid spawning a new PrismaClient per hot-reload in dev,
+// which exhausts Postgres connections quickly.
+export const prisma =
+  global.__leadflowPrisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') {
+  global.__leadflowPrisma = prisma;
+}
+
+export * from '@prisma/client';

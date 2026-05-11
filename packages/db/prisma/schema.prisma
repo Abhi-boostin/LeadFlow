@@ -1,0 +1,116 @@
+// LeadFlow database schema.
+// Source of truth for User, Lead, Discussion, Transcription, NotificationLog.
+// Generated client is consumed by apps/api and apps/web through @leadflow/db.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  WON
+  LOST
+}
+
+enum DiscussionSource {
+  MANUAL
+  TRANSCRIPTION
+  SMS_REPLY
+  TELEGRAM
+}
+
+model User {
+  id                    String    @id @default(uuid()) @db.Uuid
+  email                 String    @unique
+  name                  String
+  avatarUrl             String?
+  googleId              String?   @unique
+  summarizationPrompt   String    @default("Summarise the discussion in 3 bullets. Extract any dates, money amounts, and action items.")
+  smsNumber             String?
+  smsOptIn              Boolean   @default(false)
+  timezone              String    @default("UTC")
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  leads       Lead[]
+  discussions Discussion[]
+
+  @@index([email])
+}
+
+model Lead {
+  id               String     @id @default(uuid()) @db.Uuid
+  userId           String     @db.Uuid
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  company          String?
+  phone            String?
+  status           LeadStatus @default(NEW)
+  // Denormalised from latest discussion so filtering by "due today" is a cheap index scan.
+  nextFollowUpAt   DateTime?
+  // Denormalised so the lead list sorts by recent activity without a join.
+  lastDiscussionAt DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  discussions Discussion[]
+
+  @@index([userId, status])
+  @@index([userId, nextFollowUpAt])
+  @@index([userId, lastDiscussionAt(sort: Desc)])
+}
+
+model Discussion {
+  id         String           @id @default(uuid()) @db.Uuid
+  leadId     String           @db.Uuid
+  lead       Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  userId     String           @db.Uuid
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note       String           @db.Text
+  followUpAt DateTime?
+  source     DiscussionSource @default(MANUAL)
+  // Free-form JSON: { summary, rawTranscript, model, promptUsed } and any future AI metadata.
+  aiMetadata Json?
+  createdAt  DateTime         @default(now())
+
+  transcription Transcription?
+
+  @@index([leadId, createdAt(sort: Desc)])
+  @@index([userId, followUpAt])
+}
+
+model Transcription {
+  id              String     @id @default(uuid()) @db.Uuid
+  discussionId    String     @unique @db.Uuid
+  discussion      Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  audioUrl        String
+  rawTranscript   String     @db.Text
+  summary         String     @db.Text
+  // Snapshot of the user's summarisation prompt at the moment this summary was generated.
+  promptUsed      String     @db.Text
+  model           String
+  durationSeconds Int
+  createdAt       DateTime   @default(now())
+}
+
+model NotificationLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @db.Uuid
+  // "daily_digest" | "follow_up_reminder" | "weekly_email"
+  kind         String
+  targetLeadId String?  @db.Uuid
+  // "sms" | "email"
+  channel      String
+  sentAt       DateTime @default(now())
+
+  @@index([userId, kind, sentAt])
+}
