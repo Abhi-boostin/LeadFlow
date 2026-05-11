@@ -1,0 +1,26 @@
+{
+  "name": "leadflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A single-screen, AI-augmented CRM for sales reps.",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter=./apps/* dev",
+    "build": "pnpm -r --filter=./apps/* build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "seed": "pnpm --filter @leadflow/db seed",
+    "db:generate": "pnpm --filter @leadflow/db generate",
+    "db:migrate": "pnpm --filter @leadflow/db migrate",
+    "db:studio": "pnpm --filter @leadflow/db studio",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json,yaml,yml}\" --ignore-path .gitignore"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.2",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.4.0"
+}
