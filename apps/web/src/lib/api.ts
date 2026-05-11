@@ -23,7 +23,12 @@ export class ApiError extends Error {
 
 export async function apiFetch<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  if (!headers.has('content-type')) headers.set('content-type', 'application/json');
+  const isFormData = init?.body instanceof FormData;
+  // Do not set Content-Type when body is FormData - the browser must set the
+  // multipart boundary automatically.
+  if (!isFormData && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
   if (DEV_USER_ID && !headers.has('x-user-id')) headers.set('x-user-id', DEV_USER_ID);
 
   const res = await fetch(`${API_BASE_URL}${path}`, {

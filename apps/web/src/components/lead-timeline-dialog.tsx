@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Check, ChevronDown, Phone, Sparkles } from 'lucide-react';
+import { Bell, Check, ChevronDown, Mic, Phone, Sparkles, Square, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -82,6 +82,23 @@ export function LeadTimelineDialog({
   // Per-discussion summarise state
   const [summarisingId, setSummarisingId] = useState<string | null>(null);
 
+  // Recording / transcription state
+  type RecordState = 'idle' | 'recording' | 'uploading';
+  const [recordState, setRecordState] = useState<RecordState>('idle');
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
   // Reset state whenever the dialog opens for a new lead.
   useEffect(() => {
     if (!open || !leadId) {
@@ -131,6 +148,64 @@ export function LeadTimelineDialog({
       const message = e instanceof Error ? e.message : 'Status update failed';
       setError(message);
       toast.error(message);
+    }
+  };
+
+  const uploadRecording = async (blob: Blob) => {
+    if (!lead) return;
+    setRecordState('uploading');
+    const form = new FormData();
+    form.append('file', blob, 'recording.webm');
+    try {
+      const { discussion } = await apiFetch<{ discussion: Discussion }>(
+        `/api/v1/leads/${lead.id}/transcriptions`,
+        { method: 'POST', body: form },
+      );
+      setLead({
+        ...lead,
+        discussions: [discussion, ...lead.discussions],
+        lastDiscussionAt: discussion.createdAt,
+      });
+      toast.success('Meeting transcribed');
+      startTransition(() => router.refresh());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Transcription failed');
+    } finally {
+      setRecordState('idle');
+      setRecordSeconds(0);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      recordedChunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+        void uploadRecording(blob);
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecordSeconds(0);
+      setRecordState('recording');
+      timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch {
+      toast.error('Microphone access denied or unavailable');
+    }
+  };
+
+  const stopRecording = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
     }
   };
 
@@ -282,6 +357,45 @@ export function LeadTimelineDialog({
               summarisingId={summarisingId}
             />
 
+            <div className="border-t pt-4">
+              <div className="mb-3 flex items-center gap-3 rounded-md border bg-muted/30 p-3">
+                {recordState === 'idle' && (
+                  <button
+                    type="button"
+                    onClick={startRecording}
+                    className="inline-flex items-center gap-2 rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:bg-foreground/90"
+                  >
+                    <Mic className="h-4 w-4" />
+                    Record Meeting
+                  </button>
+                )}
+                {recordState === 'recording' && (
+                  <>
+                    <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                    <span className="text-sm font-medium">
+                      Recording {formatRecordTime(recordSeconds)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={stopRecording}
+                      className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm hover:bg-muted"
+                    >
+                      <Square className="h-3.5 w-3.5" />
+                      Stop
+                    </button>
+                  </>
+                )}
+                {recordState === 'uploading' && (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      Transcribing and summarising... (~30s for a short clip)
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-3 border-t pt-4">
               <Textarea
                 value={note}
@@ -330,6 +444,12 @@ export function LeadTimelineDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function formatRecordTime(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 function DiscussionTimeline({
