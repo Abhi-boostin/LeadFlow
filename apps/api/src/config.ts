@@ -11,6 +11,8 @@ const schema = z.object({
   GROQ_API_KEY: z.string().optional(),
   GROQ_SUMMARY_MODEL: z.string().default('llama-3.3-70b-versatile'),
   GROQ_TRANSCRIBE_MODEL: z.string().default('whisper-large-v3'),
+  FAST2SMS_API_KEY: z.string().optional(),
+  CRON_ENABLED: z.coerce.boolean().default(true),
 });
 
 const parsed = schema.safeParse(process.env);
