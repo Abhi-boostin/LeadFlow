@@ -2,7 +2,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Check, ChevronDown, Phone } from 'lucide-react';
+import { Bell, Check, ChevronDown, Phone, Sparkles } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -19,12 +19,20 @@ import { timeAgo } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { LeadStatusValues, type LeadStatus } from '@leadflow/shared';
 
+type AiMetadata = {
+  summary?: string;
+  promptUsed?: string;
+  model?: string;
+  generatedAt?: string;
+};
+
 type Discussion = {
   id: string;
   note: string;
   followUpAt: string | null;
   createdAt: string;
   source: string;
+  aiMetadata?: AiMetadata | null;
 };
 
 type LeadDetail = {
@@ -70,6 +78,9 @@ export function LeadTimelineDialog({
   const [followUpDate, setFollowUpDate] = useState('');
   const [followUpTime, setFollowUpTime] = useState('09:00');
   const [submitting, setSubmitting] = useState(false);
+
+  // Per-discussion summarise state
+  const [summarisingId, setSummarisingId] = useState<string | null>(null);
 
   // Reset state whenever the dialog opens for a new lead.
   useEffect(() => {
@@ -120,6 +131,31 @@ export function LeadTimelineDialog({
       const message = e instanceof Error ? e.message : 'Status update failed';
       setError(message);
       toast.error(message);
+    }
+  };
+
+  const handleSummarise = async (discussionId: string) => {
+    if (!lead || summarisingId) return;
+    setSummarisingId(discussionId);
+    try {
+      const { summary } = await apiFetch<{ summary: string; cached: boolean }>(
+        `/api/v1/discussions/${discussionId}/summarize`,
+        { method: 'POST' },
+      );
+      setLead({
+        ...lead,
+        discussions: lead.discussions.map((d) =>
+          d.id === discussionId
+            ? { ...d, aiMetadata: { ...(d.aiMetadata ?? {}), summary } }
+            : d,
+        ),
+      });
+      toast.success('Summarised');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Summarise failed';
+      toast.error(message);
+    } finally {
+      setSummarisingId(null);
     }
   };
 
@@ -240,7 +276,11 @@ export function LeadTimelineDialog({
               </div>
             )}
 
-            <DiscussionTimeline discussions={lead.discussions} />
+            <DiscussionTimeline
+              discussions={lead.discussions}
+              onSummarise={handleSummarise}
+              summarisingId={summarisingId}
+            />
 
             <form onSubmit={handleSubmit} className="space-y-3 border-t pt-4">
               <Textarea
@@ -292,7 +332,15 @@ export function LeadTimelineDialog({
   );
 }
 
-function DiscussionTimeline({ discussions }: { discussions: Discussion[] }) {
+function DiscussionTimeline({
+  discussions,
+  onSummarise,
+  summarisingId,
+}: {
+  discussions: Discussion[];
+  onSummarise: (id: string) => void;
+  summarisingId: string | null;
+}) {
   if (discussions.length === 0) {
     return (
       <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
@@ -302,40 +350,62 @@ function DiscussionTimeline({ discussions }: { discussions: Discussion[] }) {
   }
   return (
     <ol className="relative space-y-4 border-l-2 border-muted pl-6">
-      {discussions.map((d) => (
-        <li key={d.id} className="relative">
-          <span
-            className={cn(
-              'absolute -left-[1.85rem] top-1.5 h-3 w-3 rounded-full border-2 border-background',
-              d.source === 'TRANSCRIPTION' ? 'bg-purple-500' : 'bg-blue-500',
-            )}
-          />
-          <div className="text-xs text-muted-foreground">
-            {new Date(d.createdAt).toLocaleString([], {
-              month: 'short',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-            })}
-            <span className="ml-2">({timeAgo(d.createdAt)})</span>
-          </div>
-          <div className="mt-1.5 rounded-md border bg-background p-3">
-            <p className="whitespace-pre-wrap text-sm">{d.note}</p>
-            {d.followUpAt && (
-              <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-                <Bell className="h-3 w-3" />
-                Follow-up:{' '}
-                {new Date(d.followUpAt).toLocaleString([], {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
-              </div>
-            )}
-          </div>
-        </li>
-      ))}
+      {discussions.map((d) => {
+        const summary = d.aiMetadata?.summary;
+        const isSummarising = summarisingId === d.id;
+        return (
+          <li key={d.id} className="relative">
+            <span
+              className={cn(
+                'absolute -left-[1.85rem] top-1.5 h-3 w-3 rounded-full border-2 border-background',
+                d.source === 'TRANSCRIPTION' ? 'bg-purple-500' : 'bg-blue-500',
+              )}
+            />
+            <div className="text-xs text-muted-foreground">
+              {new Date(d.createdAt).toLocaleString([], {
+                month: 'short',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+              <span className="ml-2">({timeAgo(d.createdAt)})</span>
+            </div>
+            <div className="mt-1.5 rounded-md border bg-background p-3">
+              {summary && (
+                <div className="mb-3 rounded-md border border-purple-200 bg-purple-50/60 p-2.5">
+                  <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-purple-700">
+                    <Sparkles className="h-3 w-3" />
+                    AI Summary
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm text-purple-950">{summary}</p>
+                </div>
+              )}
+              <p className="whitespace-pre-wrap text-sm">{d.note}</p>
+              {d.followUpAt && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                  <Bell className="h-3 w-3" />
+                  Follow-up:{' '}
+                  {new Date(d.followUpAt).toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => onSummarise(d.id)}
+                disabled={isSummarising}
+                className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+              >
+                <Sparkles className="h-3 w-3" />
+                {isSummarising ? 'Summarising...' : summary ? 'Re-summarise' : 'Summarise'}
+              </button>
+            </div>
+          </li>
+        );
+      })}
     </ol>
   );
 }
