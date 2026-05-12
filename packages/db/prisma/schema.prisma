@@ -4,6 +4,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Pin the generated client to a deterministic path inside packages/db so
+  // every consumer (workspace + CI) resolves the same files. Default location
+  // varies between pnpm hoisting on Linux vs Windows.
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
