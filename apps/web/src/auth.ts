@@ -1,17 +1,6 @@
 import NextAuth from 'next-auth';
-import Google from 'next-auth/providers/google';
 import { prisma } from '@leadflow/db';
-
-declare module 'next-auth' {
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      name?: string | null;
-      image?: string | null;
-    };
-  }
-}
+import { authConfig } from './auth.config';
 
 // JWT augmentation through 'next-auth/jwt' is fragile across bundlers (Next's
 // bundler resolution loses the subpath on some platforms). We carry the custom
@@ -19,19 +8,7 @@ declare module 'next-auth' {
 type TokenWithLeadflowId = Record<string, unknown> & { leadflowId?: string };
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true,
-  session: { strategy: 'jwt' },
-  pages: {
-    signIn: '/signin',
-  },
-  providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      // Always show account chooser - sales reps often have multiple Googles
-      authorization: { params: { prompt: 'select_account' } },
-    }),
-  ],
+  ...authConfig,
   callbacks: {
     async signIn({ account, profile }) {
       if (account?.provider !== 'google' || !profile?.email) return false;
@@ -42,16 +19,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           select: { id: true },
         });
 
+        const picture =
+          typeof (profile as { picture?: unknown }).picture === 'string'
+            ? ((profile as { picture: string }).picture)
+            : null;
+
         if (existing) {
-          // Returning user — refresh display name and avatar.
           await prisma.user.update({
             where: { id: existing.id },
             data: {
               name: profile.name ?? undefined,
-              avatarUrl:
-                typeof (profile as { picture?: unknown }).picture === 'string'
-                  ? ((profile as { picture: string }).picture)
-                  : null,
+              avatarUrl: picture,
               googleId: account.providerAccountId,
             },
           });
@@ -60,10 +38,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             data: {
               email: profile.email,
               name: profile.name ?? 'Unnamed',
-              avatarUrl:
-                typeof (profile as { picture?: unknown }).picture === 'string'
-                  ? ((profile as { picture: string }).picture)
-                  : null,
+              avatarUrl: picture,
               googleId: account.providerAccountId,
               onboardingCompletedAt: new Date(),
             },
@@ -77,7 +52,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
 
     async jwt({ token, user }) {
-      // On first sign-in, look up our internal id and put it in the token.
       const t = token as TokenWithLeadflowId;
       if (user?.email && !t.leadflowId) {
         const dbUser = await prisma.user.findUnique({

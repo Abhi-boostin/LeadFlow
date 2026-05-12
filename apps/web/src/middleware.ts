@@ -1,5 +1,11 @@
-import { auth } from '@/auth';
+import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
+import { authConfig } from './auth.config';
+
+// Edge-safe NextAuth instance: built from `auth.config` ONLY, which has zero DB
+// imports. The full instance with Prisma callbacks lives in `auth.ts` and is
+// used in Node-runtime routes (Server Components, route handlers, server actions).
+const { auth } = NextAuth(authConfig);
 
 const PUBLIC_PATHS = ['/signin', '/api/auth'];
 
@@ -11,12 +17,11 @@ export default auth((req) => {
   // Bounce unauthenticated users to /signin.
   if (!isAuthed && !isPublic) {
     const url = new URL('/signin', req.url);
-    // Preserve the destination so we can redirect back after signin if we want.
     if (pathname !== '/') url.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(url);
   }
 
-  // If a signed-in user lands on /signin, send them home.
+  // Signed-in users on /signin go home.
   if (isAuthed && pathname === '/signin') {
     return NextResponse.redirect(new URL('/', req.url));
   }
@@ -26,5 +31,7 @@ export default auth((req) => {
 
 export const config = {
   // Run on every route except Next internals and static assets.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico)$).*)',
+  ],
 };
