@@ -2,7 +2,17 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Bell, Check, ChevronDown, Mic, Phone, Sparkles, Square, Loader2 } from 'lucide-react';
+import {
+  AlertOctagon,
+  Bell,
+  Check,
+  ChevronDown,
+  Loader2,
+  Mic,
+  Phone,
+  Sparkles,
+  Square,
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -10,12 +20,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/status-badge';
 import { apiFetch } from '@/lib/api';
-import { timeAgo } from '@/lib/format';
+import { isToday, isOverdue, timeAgo, timestamp, timeOnly } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { LeadStatusValues, type LeadStatus } from '@leadflow/shared';
 
@@ -51,7 +60,7 @@ const STATUS_LABELS: Record<LeadStatus, string> = {
   NEW: 'New',
   CONTACTED: 'Contacted',
   QUALIFIED: 'Qualified',
-  PROPOSAL_SENT: 'Proposal Sent',
+  PROPOSAL_SENT: 'Proposal sent',
   WON: 'Won',
   LOST: 'Lost',
 };
@@ -60,10 +69,12 @@ export function LeadTimelineDialog({
   leadId,
   open,
   onOpenChange,
+  now,
 }: {
   leadId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  now: Date;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -72,17 +83,17 @@ export function LeadTimelineDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Discussion form state
+  // Compose form
   const [note, setNote] = useState('');
   const [followUpEnabled, setFollowUpEnabled] = useState(false);
   const [followUpDate, setFollowUpDate] = useState('');
   const [followUpTime, setFollowUpTime] = useState('09:00');
   const [submitting, setSubmitting] = useState(false);
 
-  // Per-discussion summarise state
+  // AI summarise
   const [summarisingId, setSummarisingId] = useState<string | null>(null);
 
-  // Recording / transcription state
+  // Recording
   type RecordState = 'idle' | 'recording' | 'uploading';
   const [recordState, setRecordState] = useState<RecordState>('idle');
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -90,6 +101,7 @@ export function LeadTimelineDialog({
   const recordedChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Cleanup recording resources on unmount.
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -99,7 +111,7 @@ export function LeadTimelineDialog({
     };
   }, []);
 
-  // Reset state whenever the dialog opens for a new lead.
+  // Reset state and fetch lead whenever opened for a new id.
   useEffect(() => {
     if (!open || !leadId) {
       setLead(null);
@@ -108,6 +120,8 @@ export function LeadTimelineDialog({
       setFollowUpEnabled(false);
       setFollowUpDate('');
       setFollowUpTime('09:00');
+      setRecordState('idle');
+      setRecordSeconds(0);
       return;
     }
     let cancelled = false;
@@ -115,12 +129,10 @@ export function LeadTimelineDialog({
     setError(null);
     apiFetch<{ lead: LeadDetail }>(`/api/v1/leads/${leadId}`)
       .then((data) => {
-        if (cancelled) return;
-        setLead(data.lead);
+        if (!cancelled) setLead(data.lead);
       })
       .catch((e) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : 'Failed to load lead');
+        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load lead');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -133,17 +145,15 @@ export function LeadTimelineDialog({
   const handleStatusChange = async (next: LeadStatus) => {
     if (!lead || next === lead.status) return;
     const previous = lead.status;
-    // Optimistic update.
     setLead({ ...lead, status: next });
     try {
       await apiFetch<{ lead: { status: LeadStatus } }>(`/api/v1/leads/${lead.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: next }),
       });
-      toast.success(`Status: ${STATUS_LABELS[next]}`);
+      toast.success(`Marked ${STATUS_LABELS[next]}`);
       startTransition(() => router.refresh());
     } catch (e) {
-      // Rollback.
       setLead({ ...lead, status: previous });
       const message = e instanceof Error ? e.message : 'Status update failed';
       setError(message);
@@ -151,6 +161,74 @@ export function LeadTimelineDialog({
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lead || !note.trim() || submitting) return;
+
+    let followUpAt: string | null = null;
+    if (followUpEnabled && followUpDate) {
+      const time = followUpTime || '09:00';
+      const d = new Date(`${followUpDate}T${time}`);
+      if (Number.isNaN(d.getTime())) {
+        setError('Follow-up date or time is invalid');
+        return;
+      }
+      followUpAt = d.toISOString();
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const { discussion } = await apiFetch<{ discussion: Discussion }>(
+        `/api/v1/leads/${lead.id}/discussions`,
+        { method: 'POST', body: JSON.stringify({ note: note.trim(), followUpAt }) },
+      );
+      setLead({
+        ...lead,
+        discussions: [discussion, ...lead.discussions],
+        lastDiscussionAt: discussion.createdAt,
+        nextFollowUpAt: followUpAt ?? lead.nextFollowUpAt,
+      });
+      setNote('');
+      setFollowUpEnabled(false);
+      setFollowUpDate('');
+      setFollowUpTime('09:00');
+      toast.success(followUpAt ? 'Logged. Follow-up set.' : 'Note logged.');
+      startTransition(() => router.refresh());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save note';
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSummarise = async (discussionId: string) => {
+    if (!lead || summarisingId) return;
+    setSummarisingId(discussionId);
+    try {
+      const { summary } = await apiFetch<{ summary: string; cached: boolean }>(
+        `/api/v1/discussions/${discussionId}/summarize`,
+        { method: 'POST' },
+      );
+      setLead({
+        ...lead,
+        discussions: lead.discussions.map((d) =>
+          d.id === discussionId
+            ? { ...d, aiMetadata: { ...(d.aiMetadata ?? {}), summary } }
+            : d,
+        ),
+      });
+      toast.success('Summarised');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Summarise failed');
+    } finally {
+      setSummarisingId(null);
+    }
+  };
+
+  // Recording
   const uploadRecording = async (blob: Blob) => {
     if (!lead) return;
     setRecordState('uploading');
@@ -195,7 +273,7 @@ export function LeadTimelineDialog({
       setRecordState('recording');
       timerRef.current = setInterval(() => setRecordSeconds((s) => s + 1), 1000);
     } catch {
-      toast.error('Microphone access denied or unavailable');
+      toast.error('Microphone unavailable. Check permissions.');
     }
   };
 
@@ -209,241 +287,356 @@ export function LeadTimelineDialog({
     }
   };
 
-  const handleSummarise = async (discussionId: string) => {
-    if (!lead || summarisingId) return;
-    setSummarisingId(discussionId);
-    try {
-      const { summary } = await apiFetch<{ summary: string; cached: boolean }>(
-        `/api/v1/discussions/${discussionId}/summarize`,
-        { method: 'POST' },
-      );
-      setLead({
-        ...lead,
-        discussions: lead.discussions.map((d) =>
-          d.id === discussionId
-            ? { ...d, aiMetadata: { ...(d.aiMetadata ?? {}), summary } }
-            : d,
-        ),
-      });
-      toast.success('Summarised');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Summarise failed';
-      toast.error(message);
-    } finally {
-      setSummarisingId(null);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!lead || !note.trim() || submitting) return;
-
-    let followUpAt: string | null = null;
-    if (followUpEnabled && followUpDate) {
-      const time = followUpTime || '09:00';
-      const d = new Date(`${followUpDate}T${time}`);
-      if (Number.isNaN(d.getTime())) {
-        setError('Follow-up date or time is invalid');
-        return;
-      }
-      followUpAt = d.toISOString();
-    }
-
-    setSubmitting(true);
-    setError(null);
-    try {
-      const { discussion } = await apiFetch<{ discussion: Discussion }>(
-        `/api/v1/leads/${lead.id}/discussions`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ note: note.trim(), followUpAt }),
-        },
-      );
-      setLead({
-        ...lead,
-        discussions: [discussion, ...lead.discussions],
-        lastDiscussionAt: discussion.createdAt,
-        nextFollowUpAt: followUpAt ?? lead.nextFollowUpAt,
-      });
-      setNote('');
-      setFollowUpEnabled(false);
-      setFollowUpDate('');
-      setFollowUpTime('09:00');
-      toast.success(followUpAt ? 'Note saved, follow-up set' : 'Note saved');
-      startTransition(() => router.refresh());
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save note';
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const followUpToday = lead && isToday(lead.nextFollowUpAt, now);
+  const followUpOverdue =
+    lead &&
+    !followUpToday &&
+    isOverdue(lead.nextFollowUpAt, now) &&
+    lead.status !== 'WON' &&
+    lead.status !== 'LOST';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        {loading && (
-          <div className="py-10 text-center text-sm text-muted-foreground">Loading...</div>
-        )}
+      <DialogContent className="max-h-[92vh] max-w-3xl overflow-hidden p-0">
+        {/* Custom scroll area so header can stay sticky if we want */}
+        <div className="max-h-[92vh] overflow-y-auto">
+          {loading && (
+            <div className="px-7 py-16 text-center text-[13px] text-ink-mute">
+              <Loader2 className="mx-auto mb-2 h-4 w-4 animate-spin" />
+              Loading lead…
+            </div>
+          )}
 
-        {!loading && error && !lead && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {error}
-          </div>
-        )}
+          {!loading && error && !lead && (
+            <div className="m-7 border-l-2 border-accent bg-accent-soft px-4 py-3 text-[13px] text-accent-deep">
+              {error}
+            </div>
+          )}
 
-        {lead && (
-          <div className="space-y-5">
-            <div className="flex items-start justify-between gap-4 pr-8">
-              <div className="min-w-0">
-                <DialogTitle className="truncate text-xl">
+          {lead && (
+            <div className="p-7">
+              {/* HEADER */}
+              <header className="mb-6 pr-8">
+                <DialogTitle className="font-display text-[40px] leading-[1.05] tracking-tightest">
                   {lead.name}
-                  {lead.company && (
-                    <span className="ml-2 text-base font-normal text-muted-foreground">
-                      ({lead.company})
+                </DialogTitle>
+                {lead.company && (
+                  <div className="mt-1 font-display italic text-[22px] leading-tight text-ink-mute">
+                    {lead.company}
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-label">
+                  {/* Phone */}
+                  {lead.phone && (
+                    <a
+                      href={`tel:${lead.phone}`}
+                      className="inline-flex items-center gap-1.5 text-ink-mute transition-colors hover:text-ink"
+                    >
+                      <Phone className="h-3 w-3" aria-hidden />
+                      {lead.phone}
+                    </a>
+                  )}
+
+                  {/* Status dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 text-ink-mute transition-colors hover:text-ink"
+                      >
+                        <span className="opacity-80">Status</span>
+                        <StatusBadge status={lead.status} />
+                        <ChevronDown className="h-3 w-3" aria-hidden />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      className="border border-line bg-surface p-1 shadow-lift"
+                    >
+                      {LeadStatusValues.map((s) => (
+                        <DropdownMenuItem
+                          key={s}
+                          onSelect={() => void handleStatusChange(s)}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-2 px-2 py-1.5 font-sans text-[13px]',
+                            lead.status === s && 'bg-paper-deep',
+                          )}
+                        >
+                          <Check
+                            className={cn(
+                              'h-3 w-3',
+                              lead.status === s ? 'opacity-100' : 'opacity-0',
+                            )}
+                          />
+                          {STATUS_LABELS[s]}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {/* Follow-up indicator */}
+                  {followUpToday && lead.nextFollowUpAt && (
+                    <span className="inline-flex items-center gap-1.5 text-ink">
+                      <Bell className="h-3 w-3" aria-hidden />
+                      <span suppressHydrationWarning>
+                        Today {timeOnly(lead.nextFollowUpAt)}
+                      </span>
                     </span>
                   )}
-                </DialogTitle>
-                {lead.phone && (
-                  <a
-                    href={`tel:${lead.phone}`}
-                    className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    <Phone className="h-3.5 w-3.5" />
-                    {lead.phone}
-                  </a>
-                )}
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-md border bg-background px-2.5 py-1.5 text-sm hover:bg-muted"
-                  >
-                    <StatusBadge status={lead.status} />
-                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {LeadStatusValues.map((s) => (
-                    <DropdownMenuItem
-                      key={s}
-                      onSelect={() => {
-                        void handleStatusChange(s);
-                      }}
-                    >
-                      {lead.status === s ? (
-                        <Check className="mr-2 h-3.5 w-3.5" />
-                      ) : (
-                        <span className="mr-2 inline-block h-3.5 w-3.5" />
-                      )}
-                      {STATUS_LABELS[s]}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            {error && lead && (
-              <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
-                {error}
-              </div>
-            )}
-
-            <DiscussionTimeline
-              discussions={lead.discussions}
-              onSummarise={handleSummarise}
-              summarisingId={summarisingId}
-            />
-
-            <div className="border-t pt-4">
-              <div className="mb-3 flex items-center gap-3 rounded-md border bg-muted/30 p-3">
-                {recordState === 'idle' && (
-                  <button
-                    type="button"
-                    onClick={startRecording}
-                    className="inline-flex items-center gap-2 rounded-md bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:bg-foreground/90"
-                  >
-                    <Mic className="h-4 w-4" />
-                    Record Meeting
-                  </button>
-                )}
-                {recordState === 'recording' && (
-                  <>
-                    <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
-                    <span className="text-sm font-medium">
-                      Recording {formatRecordTime(recordSeconds)}
+                  {followUpOverdue && lead.nextFollowUpAt && (
+                    <span className="inline-flex items-center gap-1.5 text-accent">
+                      <AlertOctagon className="h-3 w-3" aria-hidden />
+                      Overdue
                     </span>
-                    <button
-                      type="button"
-                      onClick={stopRecording}
-                      className="ml-auto inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-sm hover:bg-muted"
-                    >
-                      <Square className="h-3.5 w-3.5" />
-                      Stop
-                    </button>
-                  </>
-                )}
-                {recordState === 'uploading' && (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">
-                      Transcribing and summarising... (~30s for a short clip)
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
+                  )}
+                </div>
+              </header>
 
-            <form onSubmit={handleSubmit} className="space-y-3 border-t pt-4">
-              <Textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Log a new discussion..."
-                rows={3}
+              {error && lead && (
+                <div className="mb-4 border-l-2 border-accent bg-accent-soft px-3 py-2 text-[12px] text-accent-deep">
+                  {error}
+                </div>
+              )}
+
+              {/* TIMELINE */}
+              <section
+                aria-label="Discussion timeline"
+                className="mb-6 border-t border-line pt-6"
+              >
+                <DiscussionTimeline
+                  discussions={lead.discussions}
+                  onSummarise={handleSummarise}
+                  summarisingId={summarisingId}
+                  now={now}
+                />
+              </section>
+
+              {/* RECORD BAR */}
+              <RecordBar
+                state={recordState}
+                seconds={recordSeconds}
+                onStart={startRecording}
+                onStop={stopRecording}
               />
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={followUpEnabled}
-                    onChange={(e) => setFollowUpEnabled(e.target.checked)}
-                    className="h-4 w-4 rounded border-input"
-                  />
-                  Set Follow-up
-                </label>
-                {followUpEnabled && (
-                  <>
-                    <Input
-                      type="date"
-                      value={followUpDate}
-                      onChange={(e) => setFollowUpDate(e.target.value)}
-                      className="h-9 w-auto"
-                      required
+
+              {/* COMPOSE FORM */}
+              <form
+                onSubmit={handleSubmit}
+                className="mt-4 border border-line bg-paper-subtle"
+              >
+                <div className="border-b border-line bg-surface px-4 py-2 font-mono text-[10px] uppercase tracking-eyebrow text-ink-mute">
+                  Log a discussion
+                </div>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="What did you talk about? Quick bullets work — Leadflow's AI can summarise later."
+                  rows={3}
+                  className="border-0 bg-transparent focus-visible:border-0 focus-visible:ring-0 focus-visible:shadow-none"
+                />
+                <div className="flex flex-wrap items-center gap-3 border-t border-line bg-surface px-4 py-2.5">
+                  <label className="inline-flex cursor-pointer items-center gap-2 font-mono text-[10px] uppercase tracking-label text-ink-mute">
+                    <input
+                      type="checkbox"
+                      checked={followUpEnabled}
+                      onChange={(e) => setFollowUpEnabled(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-ink"
                     />
-                    <Input
-                      type="time"
-                      value={followUpTime}
-                      onChange={(e) => setFollowUpTime(e.target.value)}
-                      className="h-9 w-auto"
-                    />
-                  </>
-                )}
-                <Button
-                  type="submit"
-                  disabled={!note.trim() || submitting}
-                  className="ml-auto bg-foreground text-background hover:bg-foreground/90"
-                >
-                  {submitting ? 'Saving...' : 'Save Note'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        )}
+                    Set follow-up
+                  </label>
+                  {followUpEnabled && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        value={followUpDate}
+                        onChange={(e) => setFollowUpDate(e.target.value)}
+                        className="h-8 w-auto py-1 text-[12px]"
+                        required
+                      />
+                      <Input
+                        type="time"
+                        value={followUpTime}
+                        onChange={(e) => setFollowUpTime(e.target.value)}
+                        className="h-8 w-auto py-1 text-[12px]"
+                      />
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={!note.trim() || submitting}
+                    className={cn(
+                      'ml-auto inline-flex h-8 items-center gap-1.5 bg-ink px-4 font-mono text-[10px] font-medium uppercase tracking-label text-paper',
+                      'transition-colors hover:bg-ink-soft disabled:opacity-40 disabled:hover:bg-ink',
+                    )}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Saving
+                      </>
+                    ) : (
+                      'Save note'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
+}
+
+/* ----------------------------------------------------------------------- */
+
+function DiscussionTimeline({
+  discussions,
+  onSummarise,
+  summarisingId,
+  now,
+}: {
+  discussions: Discussion[];
+  onSummarise: (id: string) => void;
+  summarisingId: string | null;
+  now: Date;
+}) {
+  if (discussions.length === 0) {
+    return (
+      <div className="border border-dashed border-line bg-paper-subtle px-6 py-10 text-center">
+        <p className="font-display text-xl text-ink">No discussions yet.</p>
+        <p className="mt-2 text-[13px] text-ink-mute">
+          Record a meeting above, or log a note below.
+        </p>
+      </div>
+    );
+  }
+
+  // Group by day for journal-style date dividers.
+  const groups = groupByDay(discussions);
+
+  return (
+    <ol className="relative space-y-7">
+      <div
+        aria-hidden
+        className="absolute left-[7px] top-1 bottom-1 w-px bg-line"
+      />
+      {groups.map((group) => (
+        <li key={group.dayKey} className="relative">
+          <div className="mb-3 flex items-center gap-2 pl-7">
+            <span className="font-mono text-[10px] uppercase tracking-eyebrow text-ink-mute">
+              {group.label}
+            </span>
+            <span aria-hidden className="h-px flex-1 bg-line-soft" />
+          </div>
+          <ol className="space-y-5">
+            {group.items.map((d) => {
+              const summary = d.aiMetadata?.summary;
+              const isSummarising = summarisingId === d.id;
+              const dotColor =
+                d.source === 'TRANSCRIPTION'
+                  ? 'bg-[hsl(var(--dot-transcription))]'
+                  : 'bg-[hsl(var(--dot-manual))]';
+              return (
+                <li key={d.id} className="relative pl-7">
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'absolute left-[3px] top-2 h-2.5 w-2.5 rounded-full ring-2 ring-surface',
+                      dotColor,
+                    )}
+                  />
+                  {/* Timestamp + source */}
+                  <div className="mb-1.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-label text-ink-mute">
+                    <span suppressHydrationWarning>{timestamp(d.createdAt)}</span>
+                    <span aria-hidden>·</span>
+                    <span suppressHydrationWarning>{timeAgo(d.createdAt, now)}</span>
+                    {d.source === 'TRANSCRIPTION' && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="text-[hsl(var(--dot-transcription))]">
+                          Transcribed
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* AI summary — margin annotation */}
+                  {summary && (
+                    <div className="mb-2 border-l-2 border-ink/40 bg-paper-subtle px-3 py-2.5 animate-fade-in">
+                      <div className="mb-1 flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-eyebrow text-ink-mute">
+                        <Sparkles className="h-3 w-3" aria-hidden />
+                        AI summary
+                      </div>
+                      <p className="font-display italic text-[15px] leading-snug text-ink">
+                        {summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Note body */}
+                  <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink">
+                    {d.note}
+                  </p>
+
+                  {/* Follow-up marker on this discussion */}
+                  {d.followUpAt && (
+                    <div className="mt-2 inline-flex items-center gap-1.5 border-l border-line-strong pl-2 font-mono text-[10px] uppercase tracking-label text-ink-soft">
+                      <Bell className="h-3 w-3" aria-hidden />
+                      Follow-up:{' '}
+                      <span suppressHydrationWarning>{timestamp(d.followUpAt)}</span>
+                    </div>
+                  )}
+
+                  {/* Summarise action */}
+                  <button
+                    type="button"
+                    onClick={() => onSummarise(d.id)}
+                    disabled={isSummarising}
+                    className={cn(
+                      'mt-2 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-label transition-colors',
+                      'text-ink-mute hover:text-ink disabled:opacity-50',
+                    )}
+                  >
+                    {isSummarising ? (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                    ) : (
+                      <Sparkles className="h-3 w-3" aria-hidden />
+                    )}
+                    {isSummarising
+                      ? 'Summarising'
+                      : summary
+                        ? 'Re-summarise'
+                        : 'Summarise'}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function groupByDay(discussions: Discussion[]) {
+  const map = new Map<string, Discussion[]>();
+  for (const d of discussions) {
+    const dayKey = new Date(d.createdAt).toDateString();
+    const arr = map.get(dayKey) ?? [];
+    arr.push(d);
+    map.set(dayKey, arr);
+  }
+  return Array.from(map.entries()).map(([dayKey, items]) => {
+    const date = new Date(dayKey);
+    const label = new Intl.DateTimeFormat('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    }).format(date);
+    return { dayKey, items, label };
+  });
 }
 
 function formatRecordTime(totalSeconds: number): string {
@@ -452,80 +645,72 @@ function formatRecordTime(totalSeconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function DiscussionTimeline({
-  discussions,
-  onSummarise,
-  summarisingId,
+function RecordBar({
+  state,
+  seconds,
+  onStart,
+  onStop,
 }: {
-  discussions: Discussion[];
-  onSummarise: (id: string) => void;
-  summarisingId: string | null;
+  state: 'idle' | 'recording' | 'uploading';
+  seconds: number;
+  onStart: () => void;
+  onStop: () => void;
 }) {
-  if (discussions.length === 0) {
-    return (
-      <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
-        No discussions logged yet. Add one below.
-      </p>
-    );
-  }
   return (
-    <ol className="relative space-y-4 border-l-2 border-muted pl-6">
-      {discussions.map((d) => {
-        const summary = d.aiMetadata?.summary;
-        const isSummarising = summarisingId === d.id;
-        return (
-          <li key={d.id} className="relative">
-            <span
-              className={cn(
-                'absolute -left-[1.85rem] top-1.5 h-3 w-3 rounded-full border-2 border-background',
-                d.source === 'TRANSCRIPTION' ? 'bg-purple-500' : 'bg-blue-500',
-              )}
-            />
-            <div className="text-xs text-muted-foreground">
-              {new Date(d.createdAt).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-              })}
-              <span className="ml-2">({timeAgo(d.createdAt)})</span>
-            </div>
-            <div className="mt-1.5 rounded-md border bg-background p-3">
-              {summary && (
-                <div className="mb-3 rounded-md border border-purple-200 bg-purple-50/60 p-2.5">
-                  <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-purple-700">
-                    <Sparkles className="h-3 w-3" />
-                    AI Summary
-                  </div>
-                  <p className="whitespace-pre-wrap text-sm text-purple-950">{summary}</p>
-                </div>
-              )}
-              <p className="whitespace-pre-wrap text-sm">{d.note}</p>
-              {d.followUpAt && (
-                <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-                  <Bell className="h-3 w-3" />
-                  Follow-up:{' '}
-                  {new Date(d.followUpAt).toLocaleString([], {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => onSummarise(d.id)}
-                disabled={isSummarising}
-                className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground transition hover:text-foreground disabled:opacity-50"
-              >
-                <Sparkles className="h-3 w-3" />
-                {isSummarising ? 'Summarising...' : summary ? 'Re-summarise' : 'Summarise'}
-              </button>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+    <div
+      className={cn(
+        'flex items-center gap-3 border bg-surface px-4 py-3 transition-colors',
+        state === 'recording' ? 'border-accent/60' : 'border-line',
+      )}
+    >
+      {state === 'idle' && (
+        <>
+          <button
+            type="button"
+            onClick={onStart}
+            className="inline-flex items-center gap-2 bg-accent px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-label text-paper transition-colors hover:bg-accent-deep"
+          >
+            <Mic className="h-3.5 w-3.5" />
+            Record meeting
+          </button>
+          <span className="font-mono text-[10px] uppercase tracking-label text-ink-mute">
+            Auto-transcribe & summarise with your AI rules
+          </span>
+        </>
+      )}
+      {state === 'recording' && (
+        <>
+          <span
+            aria-hidden
+            className="recording-dot inline-block h-2.5 w-2.5 rounded-full bg-accent"
+          />
+          <span className="font-mono text-[11px] uppercase tracking-label text-accent-deep">
+            Recording
+          </span>
+          <span className="font-mono text-[14px] tabular-nums text-ink">
+            {formatRecordTime(seconds)}
+          </span>
+          <button
+            type="button"
+            onClick={onStop}
+            className="ml-auto inline-flex items-center gap-1.5 border border-line bg-paper px-3 py-1.5 font-mono text-[10px] font-medium uppercase tracking-label text-ink transition-colors hover:bg-paper-deep"
+          >
+            <Square className="h-3 w-3" />
+            Stop
+          </button>
+        </>
+      )}
+      {state === 'uploading' && (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin text-ink-mute" />
+          <span className="font-mono text-[10px] uppercase tracking-label text-ink-mute">
+            Transcribing & summarising…
+          </span>
+          <span className="ml-auto font-mono text-[10px] uppercase tracking-label text-ink-mute">
+            ~30s
+          </span>
+        </>
+      )}
+    </div>
   );
 }

@@ -1,6 +1,5 @@
 'use client';
-import { Bell, AlertCircle } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { ArrowUpRight, AlertOctagon, Bell } from 'lucide-react';
 import { StatusBadge } from '@/components/status-badge';
 import { cn } from '@/lib/utils';
 import { timeAgo, timeAgoShort, timeOnly, isToday, isOverdue } from '@/lib/format';
@@ -17,71 +16,123 @@ export type LeadCardData = {
   lastNote: string | null;
 };
 
+/**
+ * A row, not a card. Table-density. Single horizontal divider between leads.
+ * The left edge of each row is a colored hairline that marks urgency state.
+ */
 export function LeadCard({
   lead,
   onClick,
+  now,
 }: {
   lead: LeadCardData;
   onClick?: (id: string) => void;
+  now: Date;
 }) {
-  const followUpToday = isToday(lead.nextFollowUpAt);
+  const followUpToday = isToday(lead.nextFollowUpAt, now);
   const overdue =
     !followUpToday &&
-    isOverdue(lead.nextFollowUpAt) &&
+    isOverdue(lead.nextFollowUpAt, now) &&
     lead.status !== 'WON' &&
     lead.status !== 'LOST';
+  const closed = lead.status === 'WON' || lead.status === 'LOST';
 
   return (
-    <Card
+    <button
+      type="button"
       onClick={() => onClick?.(lead.id)}
       className={cn(
-        'cursor-pointer transition hover:bg-muted/40',
-        overdue && 'border-red-300 bg-red-50/40',
-        lead.status === 'WON' && 'opacity-70',
+        'group relative flex w-full items-stretch border-b border-line bg-surface text-left',
+        'transition-colors last:border-b-0',
+        'hover:bg-paper-subtle focus:outline-none focus-visible:bg-paper-deep/60',
+        closed && 'opacity-60 hover:opacity-100',
       )}
+      aria-label={`Open ${lead.name}${lead.company ? ` at ${lead.company}` : ''}`}
     >
-      <div className="flex items-start justify-between gap-4 p-5">
+      {/* Left urgency indicator hairline */}
+      <span
+        aria-hidden
+        className={cn(
+          'w-[3px] shrink-0 transition-colors',
+          overdue && 'bg-accent',
+          followUpToday && !overdue && 'bg-ink',
+          !overdue && !followUpToday && 'bg-transparent',
+        )}
+      />
+
+      <div className="flex flex-1 items-start gap-5 px-5 py-4 sm:px-6">
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
+          {/* Name + company row */}
+          <div className="flex items-baseline gap-2.5 flex-wrap">
             <h3
               className={cn(
-                'truncate text-base font-semibold',
-                lead.status === 'WON' && 'text-muted-foreground',
+                'font-display text-[22px] leading-[1.1] text-ink',
+                closed && 'text-ink-mute',
               )}
             >
               {lead.name}
             </h3>
             {lead.company && (
-              <span className="truncate text-sm text-muted-foreground">({lead.company})</span>
+              <span className="font-display italic text-[15px] text-ink-mute leading-tight">
+                {lead.company}
+              </span>
             )}
           </div>
 
+          {/* Last note */}
           {lead.lastNote && (
-            <p className="mt-2 line-clamp-1 text-sm text-foreground">
-              <span className="font-semibold">Last Note:</span> {lead.lastNote}
-              <span className="ml-2 text-xs text-muted-foreground">
-                {timeAgo(lead.lastDiscussionAt)}
-              </span>
+            <p
+              className={cn(
+                'mt-1.5 line-clamp-1 text-[13px] text-ink-soft',
+                closed && 'text-ink-mute',
+              )}
+            >
+              {lead.lastNote}
             </p>
           )}
 
-          {followUpToday && lead.nextFollowUpAt && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-              <Bell className="h-3 w-3" />
-              Follow-up today at {timeOnly(lead.nextFollowUpAt)}
-            </div>
-          )}
+          {/* Meta row: time-ago and flags */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-1 font-mono text-[10px] uppercase tracking-label text-ink-mute">
+            <span suppressHydrationWarning>{timeAgo(lead.lastDiscussionAt, now)}</span>
 
-          {overdue && lead.nextFollowUpAt && (
-            <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-red-700">
-              <AlertCircle className="h-3 w-3" />
-              Overdue by {timeAgoShort(lead.nextFollowUpAt)}
-            </div>
-          )}
+            {followUpToday && lead.nextFollowUpAt && (
+              <>
+                <span aria-hidden className="px-1 opacity-50">
+                  /
+                </span>
+                <span className="inline-flex items-center gap-1 text-ink">
+                  <Bell className="h-3 w-3" aria-hidden />
+                  <span suppressHydrationWarning>
+                    Today {timeOnly(lead.nextFollowUpAt)}
+                  </span>
+                </span>
+              </>
+            )}
+
+            {overdue && lead.nextFollowUpAt && (
+              <>
+                <span aria-hidden className="px-1 opacity-50">
+                  /
+                </span>
+                <span className="inline-flex items-center gap-1 text-accent">
+                  <AlertOctagon className="h-3 w-3" aria-hidden />
+                  <span suppressHydrationWarning>
+                    {timeAgoShort(lead.nextFollowUpAt, now)} overdue
+                  </span>
+                </span>
+              </>
+            )}
+          </div>
         </div>
 
-        <StatusBadge status={lead.status} />
+        <div className="flex shrink-0 items-start gap-3 pt-0.5">
+          <StatusBadge status={lead.status} />
+          <ArrowUpRight
+            aria-hidden
+            className="h-4 w-4 text-ink-mute opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100"
+          />
+        </div>
       </div>
-    </Card>
+    </button>
   );
 }

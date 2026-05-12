@@ -4,11 +4,9 @@ import { LeadStatusSchema } from '@leadflow/shared';
 import type { LeadCardData } from '@/components/lead-card';
 import type { FilterValue } from '@/components/filter-chips';
 
-// Force dynamic rendering: each request reflects the current DB state and the URL search params.
 export const dynamic = 'force-dynamic';
 
 type SearchParams = { status?: string; q?: string };
-
 type ListResponse = { leads: LeadCardData[] };
 
 async function fetchLeads(
@@ -41,12 +39,17 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const parsedStatus = LeadStatusSchema.safeParse(searchParams.status);
   const initialFilter: FilterValue = parsedStatus.success ? parsedStatus.data : 'all';
 
+  // Render-time reference now. Sent to the client so initial hydration sees the same
+  // value as the SSR pass — eliminates the time-relative hydration mismatch.
+  const serverNow = new Date().toISOString();
+
   return (
     <LeadListClient
       initialLeads={leads}
       initialError={error}
       initialFilter={initialFilter}
       initialQuery={searchParams.q ?? ''}
+      initialNow={serverNow}
     />
   );
 }

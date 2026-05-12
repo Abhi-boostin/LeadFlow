@@ -2,12 +2,13 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { apiFetch } from '@/lib/api';
 import { CreateLeadSchema } from '@leadflow/shared';
+import { cn } from '@/lib/utils';
 
 export function AddLeadDialog({
   open,
@@ -70,64 +71,91 @@ export function AddLeadDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogTitle>Add New Lead</DialogTitle>
+      <DialogContent className="max-w-md p-7">
+        <div className="mb-4">
+          <p className="mb-1 font-mono text-[10px] uppercase tracking-eyebrow text-ink-mute">
+            New entry
+          </p>
+          <DialogTitle className="font-display text-[32px] leading-tight">
+            Add a lead
+          </DialogTitle>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1.5">
+          <Field>
             <Label htmlFor="lead-name">
-              Full Name <span className="text-destructive">*</span>
+              Name <span className="text-accent">*</span>
             </Label>
             <Input
               id="lead-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., John Doe"
+              placeholder="e.g. Sarah Connor"
               autoFocus
               required
               maxLength={100}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="lead-company">
-              Company{' '}
-              <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
-            </Label>
+          </Field>
+          <Field>
+            <Label htmlFor="lead-company">Company</Label>
             <Input
               id="lead-company"
               value={company}
               onChange={(e) => setCompany(e.target.value)}
-              placeholder="e.g., Stark Industries"
+              placeholder="e.g. Acme Corp"
               maxLength={100}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="lead-phone">
-              Phone <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
-            </Label>
+          </Field>
+          <Field>
+            <Label htmlFor="lead-phone">Phone</Label>
             <Input
               id="lead-phone"
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="e.g., 555-0123"
+              placeholder="e.g. 555-0123"
               maxLength={30}
             />
-          </div>
+          </Field>
+
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+            <div className="border-l-2 border-accent bg-accent-soft px-3 py-2 text-[12px] text-accent-deep">
               {error}
             </div>
           )}
-          <div className="flex items-center justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+
+          <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex h-9 items-center px-3 font-mono text-[10px] uppercase tracking-label text-ink-mute transition-colors hover:text-ink"
+            >
               Cancel
-            </Button>
-            <Button type="submit" disabled={!name.trim() || submitting}>
-              {submitting ? 'Saving...' : 'Save Lead'}
-            </Button>
+            </button>
+            <button
+              type="submit"
+              disabled={!name.trim() || submitting}
+              className={cn(
+                'inline-flex h-9 items-center gap-1.5 bg-ink px-4 font-mono text-[10px] font-medium uppercase tracking-label text-paper',
+                'transition-colors hover:bg-ink-soft disabled:opacity-40 disabled:hover:bg-ink',
+              )}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Saving
+                </>
+              ) : (
+                'Save lead'
+              )}
+            </button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
   );
+}
+
+function Field({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-1.5">{children}</div>;
 }

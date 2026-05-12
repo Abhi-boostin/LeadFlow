@@ -2,50 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =================================================================
+   LEADFLOW — FIELD JOURNAL DESIGN SYSTEM
+   Warm paper background, ink-and-iron palette, three-font story.
+   ================================================================= */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
-  }
+    /* Paper & ink */
+    --paper: 39 35% 93%;          /* #F4F0E8 warm cream */
+    --paper-deep: 38 28% 88%;     /* slightly darker for hover surfaces */
+    --paper-subtle: 38 30% 96%;   /* near-white warm tint */
+    --surface: 0 0% 100%;          /* pure white for elevated cards */
+    --ink: 30 14% 9%;              /* #1A1814 near-black, warm */
+    --ink-soft: 30 8% 22%;
+    --ink-mute: 30 6% 45%;         /* secondary body text */
+    --line: 35 18% 84%;            /* warm border */
+    --line-soft: 35 18% 90%;
+    --line-strong: 30 14% 30%;
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    /* Iron oxide / burnt sienna accent — overdue & urgency only */
+    --accent: 16 70% 42%;          /* #C84A1F */
+    --accent-deep: 14 75% 32%;
+    --accent-soft: 18 65% 94%;     /* page tint background */
+    --accent-line: 16 50% 80%;
+
+    /* Discussion source dots (timeline) */
+    --dot-manual: 210 50% 40%;     /* slate-blue, not pure blue */
+    --dot-transcription: 280 25% 45%; /* aubergine, not vivid purple */
+
+    /* Status badge palette — earth tones, subtle backgrounds */
+    --st-new-fg: 100 28% 26%;
+    --st-new-bg: 100 22% 90%;
+    --st-contacted-fg: 35 55% 28%;
+    --st-contacted-bg: 38 48% 90%;
+    --st-qualified-fg: 195 40% 26%;
+    --st-qualified-bg: 195 28% 90%;
+    --st-proposal-fg: 295 25% 28%;
+    --st-proposal-bg: 290 20% 92%;
+    --st-won-fg: 39 35% 93%;
+    --st-won-bg: 30 14% 9%;
+    --st-lost-fg: 10 38% 32%;
+    --st-lost-bg: 10 30% 91%;
+
+    --radius: 2px;
+
+    /* shadcn token bridge */
+    --background: var(--paper);
+    --foreground: var(--ink);
+    --card: var(--surface);
+    --card-foreground: var(--ink);
+    --popover: var(--surface);
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);
+    --primary-foreground: var(--paper);
+    --secondary: var(--paper-deep);
+    --secondary-foreground: var(--ink);
+    --muted: var(--paper-deep);
+    --muted-foreground: var(--ink-mute);
+    --accent-foreground: var(--paper);
+    --destructive: var(--accent);
+    --destructive-foreground: var(--paper);
+    --border: var(--line);
+    --input: var(--line);
+    --ring: var(--ink);
   }
 }
 
@@ -53,7 +73,88 @@
   * {
     @apply border-border;
   }
-  body {
-    @apply bg-background text-foreground;
+  html {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
+  body {
+    @apply bg-paper text-ink;
+    font-family: var(--font-onest), system-ui, -apple-system, sans-serif;
+    font-feature-settings: "ss01", "cv11";
+    font-size: 14px;
+    line-height: 1.5;
+    /* Subtle paper grain — fixed so it doesn't shift on scroll */
+    background-image:
+      radial-gradient(circle at 1px 1px, hsl(var(--ink) / 0.035) 1px, transparent 0);
+    background-size: 22px 22px;
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: hsl(var(--ink));
+    color: hsl(var(--paper));
+  }
+
+  /* Focus ring — square, not pill */
+  :focus-visible {
+    @apply outline-none;
+    box-shadow: 0 0 0 2px hsl(var(--paper)), 0 0 0 4px hsl(var(--ink));
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-instrument), Georgia, 'Times New Roman', serif;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .font-mono {
+    font-family: var(--font-mono), ui-monospace, 'JetBrains Mono', SFMono-Regular, monospace;
+    font-feature-settings: "ss02";
+  }
+  .tracking-label {
+    letter-spacing: 0.08em;
+  }
+  .tracking-eyebrow {
+    letter-spacing: 0.14em;
+  }
+
+  /* Decorative top rule used to mark sections */
+  .rule-top {
+    background-image: linear-gradient(to right, hsl(var(--ink)) 0 24px, transparent 24px);
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    background-position: top left;
+    padding-top: 12px;
+  }
+
+  /* Inline divider dot */
+  .dot-sep::before {
+    content: "·";
+    margin: 0 0.5rem;
+    color: hsl(var(--ink-mute));
+  }
+
+  /* Pulsing red recording dot */
+  .recording-dot {
+    box-shadow: 0 0 0 0 hsl(var(--accent) / 0.6);
+    animation: leadflow-pulse 1.6s infinite;
+  }
+}
+
+@keyframes leadflow-pulse {
+  0% { box-shadow: 0 0 0 0 hsl(var(--accent) / 0.55); }
+  70% { box-shadow: 0 0 0 8px hsl(var(--accent) / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(var(--accent) / 0); }
+}
+
+@keyframes leadflow-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes leadflow-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
