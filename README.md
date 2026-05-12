@@ -78,26 +78,58 @@ Error shape is always `{ error: { code, message, details? } }`. Status codes: 20
 
 ## Deployment
 
-### Database (Supabase)
-1. Create a project at https://supabase.com
-2. Copy the **Connection string** (Settings -> Database -> Connection pooling, mode `Transaction`) into `DATABASE_URL`
-3. Run migrations against it: `DATABASE_URL=... pnpm --filter @leadflow/db migrate:deploy`
-4. Seed (optional): `DATABASE_URL=... pnpm seed`
+Ship order: Supabase → Render → Vercel → Google OAuth. ~15 minutes end-to-end.
 
-### Backend (Render)
-1. Connect this repo at https://render.com via "New Blueprint" - it auto-detects `render.yaml`
-2. Fill in the secrets prompted by `sync: false` env vars: `DATABASE_URL`, `GROQ_API_KEY`, `FAST2SMS_API_KEY`
-3. Deploy. Health check hits `/health`.
-4. (Recommended) Set up a free [UptimeRobot](https://uptimerobot.com) monitor pinging `/health` every 5 minutes so the free dyno never cold-starts during the day.
+### 1. Database (Supabase)
+1. Create a project at https://supabase.com (free tier is fine)
+2. **Project Settings → Database → Connection string → "Transaction pooler"** tab
+3. Copy the URL and replace `[YOUR-PASSWORD]` with the project DB password (set when you created the project; if forgotten, click **Reset database password**)
+4. Locally, run migrations against Supabase one time so the schema lands:
+   ```
+   DATABASE_URL="postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres" \
+     pnpm --filter @leadflow/db migrate:deploy
+   ```
 
-### Frontend (Vercel)
-1. Import this repo at https://vercel.com
-2. Set the **Root Directory** to `apps/web` (or rely on `vercel.json` and leave at repo root - both work)
-3. Add env vars:
-   - `NEXT_PUBLIC_API_URL` = your Render API URL (e.g., `https://leadflow-api.onrender.com`)
-   - `API_INTERNAL_URL` = same as above (used by Server Components)
-   - `NEXT_PUBLIC_DEV_USER_ID` = (temporary) the seeded demo user id while real auth is being wired up
-4. Deploy.
+### 2. Backend (Render)
+1. Push the repo to GitHub (already done)
+2. https://render.com → **New** → **Blueprint** → connect this repo
+3. Render reads `render.yaml` and prompts for the secrets:
+   - `DATABASE_URL` → your Supabase Transaction-pooler URL from step 1
+   - `GROQ_API_KEY` → from https://console.groq.com/keys
+   - `FAST2SMS_API_KEY` → from https://www.fast2sms.com/dashboard/dev-api (skip if not using SMS)
+   - `REDIS_URL` → leave blank (unused for now)
+4. Deploy. Wait for green. Copy the service URL (e.g., `https://leadflow-api.onrender.com`).
+5. (Recommended) https://uptimerobot.com free monitor pinging `https://your-render-url/health` every 5 minutes so the free dyno doesn't cold-start.
+
+### 3. Frontend (Vercel)
+1. https://vercel.com → **Add New** → **Project** → import the same GitHub repo
+2. Vercel reads `vercel.json` and auto-configures build / output directory
+3. Add **Environment Variables** (Settings → Environment Variables):
+
+   | Key | Value |
+   | --- | --- |
+   | `DATABASE_URL` | Same Supabase URL as Render. Used by the Auth.js `signIn` callback to upsert users. |
+   | `NEXT_PUBLIC_API_URL` | Your Render API URL (e.g., `https://leadflow-api.onrender.com`) |
+   | `API_INTERNAL_URL` | Same as above |
+   | `AUTH_SECRET` | Run `openssl rand -base64 32` and paste the output. **Must be different from local.** |
+   | `AUTH_TRUST_HOST` | `true` |
+   | `AUTH_URL` | Your Vercel domain (e.g., `https://leadflow.vercel.app`) |
+   | `AUTH_GOOGLE_ID` | From Google Cloud Console |
+   | `AUTH_GOOGLE_SECRET` | From Google Cloud Console |
+   | `NODE_ENV` | `production` |
+4. Deploy. Copy the live URL.
+
+### 4. Google OAuth — production redirect URI
+1. https://console.cloud.google.com/apis/credentials → your OAuth 2.0 Client
+2. Under **Authorized redirect URIs**, add:
+   ```
+   https://<your-vercel-domain>/api/auth/callback/google
+   ```
+3. Save. Without this, sign-in will fail with `redirect_uri_mismatch` on production.
+4. If the OAuth consent screen is still in **Testing** mode, add any reviewer's Gmail under **Test users** (Es Magico / yourself).
+
+### Why this order?
+Supabase first because both Render and Vercel need its URL. Render before Vercel because Vercel needs the Render URL as `NEXT_PUBLIC_API_URL`. Google OAuth last because it needs the Vercel domain in the redirect URI.
 
 ## License
 All rights reserved by Abhimanyu Singh.
