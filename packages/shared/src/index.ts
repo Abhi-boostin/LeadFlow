@@ -54,3 +54,13 @@ export const UpdateUserSchema = z.object({
   timezone: z.string().max(64).optional(),
 });
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+
+// Server-to-server: Vercel's Auth.js calls Render to upsert a user after Google
+// authentication. Body for POST /api/v1/auth/google-user.
+export const GoogleUserUpsertSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(1).max(100),
+  picture: z.string().url().nullable().optional(),
+  googleId: z.string().min(1).max(64),
+});
+export type GoogleUserUpsertInput = z.infer<typeof GoogleUserUpsertSchema>;

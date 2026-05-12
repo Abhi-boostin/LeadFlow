@@ -10,6 +10,7 @@ import { leadsRoutes } from './routes/leads.js';
 import { discussionsRoutes } from './routes/discussions.js';
 import { transcriptionsRoutes } from './routes/transcriptions.js';
 import { meRoutes } from './routes/me.js';
+import { authRoutes } from './routes/auth.js';
 
 export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -58,6 +59,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   registerStubAuth(app);
 
   await app.register(healthRoutes);
+  await app.register(authRoutes);
   await app.register(meRoutes);
   await app.register(leadsRoutes);
   await app.register(discussionsRoutes);

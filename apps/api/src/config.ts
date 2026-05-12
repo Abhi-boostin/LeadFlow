@@ -13,6 +13,8 @@ const schema = z.object({
   GROQ_TRANSCRIBE_MODEL: z.string().default('whisper-large-v3'),
   FAST2SMS_API_KEY: z.string().optional(),
   CRON_ENABLED: z.coerce.boolean().default(true),
+  // Shared secret used by the Vercel frontend to call /api/v1/auth/* server-to-server.
+  INTERNAL_API_TOKEN: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
