@@ -34,6 +34,26 @@ export async function buildServer(): Promise<FastifyInstance> {
     limits: { fileSize: 25 * 1024 * 1024, files: 1 },
   });
 
+  // Accept empty bodies on application/json POSTs. Default Fastify behaviour rejects
+  // them with FST_ERR_CTP_EMPTY_JSON_BODY, but some endpoints (/summarize, future
+  // webhook acks, etc.) take no payload — the request is fully specified by the URL.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    function (_req, body, done) {
+      if (typeof body === 'string' && body.length === 0) {
+        return done(null, undefined);
+      }
+      try {
+        done(null, JSON.parse(body as string));
+      } catch (err) {
+        const e = err as Error & { statusCode?: number };
+        e.statusCode = 400;
+        done(e);
+      }
+    },
+  );
+
   registerErrorHandler(app);
   registerStubAuth(app);
 

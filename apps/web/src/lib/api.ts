@@ -24,9 +24,11 @@ export class ApiError extends Error {
 export async function apiFetch<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   const isFormData = init?.body instanceof FormData;
-  // Do not set Content-Type when body is FormData - the browser must set the
-  // multipart boundary automatically.
-  if (!isFormData && !headers.has('content-type')) {
+  const hasBody = init?.body !== undefined && init?.body !== null;
+  // Only set Content-Type when actually sending a JSON body. Setting it on an empty POST
+  // triggers Fastify's FST_ERR_CTP_EMPTY_JSON_BODY (e.g. the /summarize endpoint takes no body).
+  // FormData bodies must also let the browser set the multipart boundary automatically.
+  if (hasBody && !isFormData && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
   }
   if (DEV_USER_ID && !headers.has('x-user-id')) headers.set('x-user-id', DEV_USER_ID);
