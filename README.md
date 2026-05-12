@@ -10,7 +10,7 @@ A single-screen, AI-augmented CRM for sales reps. Track leads, log every discuss
 - **Database:** PostgreSQL on **Supabase** (Sydney pooler)
 - **AI:** Groq (Whisper transcription + Llama 3.3 70B summarisation)
 - **Auth:** Google OAuth via Auth.js v5
-- **Notifications:** Fast2SMS (SMS), Resend (email — scaffolded)
+- **Notifications:** Fast2SMS (SMS — scaffolded, currently disabled), Resend (email — scaffolded)
 
 ## Architecture
 
@@ -119,7 +119,6 @@ End-to-end in 15 minutes: **Supabase → Render → Vercel → Google OAuth**.
    DATABASE_URL=postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1
    DIRECT_URL=postgresql://postgres.<ref>:<pw>@aws-0-<region>.pooler.supabase.com:5432/postgres
    GROQ_API_KEY=<your-groq-key>
-   FAST2SMS_API_KEY=<your-fast2sms-key>
    INTERNAL_API_TOKEN=<generate one: `openssl rand -base64 32`>
    ```
 3. Deploy. Health check hits `/health`. Copy the Render URL.

@@ -28,7 +28,8 @@ services:
         generateValue: true
       - key: GROQ_API_KEY
         sync: false
-      - key: FAST2SMS_API_KEY
-        sync: false
+      # SMS feature parked — re-enable when bringing Fast2SMS back online.
+      # - key: FAST2SMS_API_KEY
+      #   sync: false
       - key: CRON_ENABLED
         value: "true"
