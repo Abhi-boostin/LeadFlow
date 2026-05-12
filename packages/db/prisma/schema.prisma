@@ -4,10 +4,12 @@
 
 generator client {
   provider = "prisma-client-js"
-  // Pin the generated client to a deterministic path inside packages/db so
-  // every consumer (workspace + CI) resolves the same files. Default location
-  // varies between pnpm hoisting on Linux vs Windows.
-  output   = "../node_modules/.prisma/client"
+  // Output the client into our own source tree (Prisma's official monorepo pattern).
+  // Consumers import from `@leadflow/db` which re-exports './generated'. This avoids
+  // the @prisma/client shim's pnpm-hoisting issues — under pnpm workspaces the shim
+  // can't locate .prisma/client/default reliably on Linux CI machines.
+  // https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/generating-prisma-client#using-a-custom-output-path
+  output   = "../src/generated"
 }
 
 datasource db {

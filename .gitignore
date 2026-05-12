@@ -47,6 +47,9 @@ prisma/migrations/dev.db*
 # TypeScript incremental build info
 *.tsbuildinfo
 
+# Prisma-generated client (lives in source tree by design, regenerated per build)
+packages/db/src/generated/
+
 # Coverage and tests
 coverage/
 *.lcov

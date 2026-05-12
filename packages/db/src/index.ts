@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { PrismaClient } from './generated/index.js';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -17,18 +17,10 @@ if (process.env.NODE_ENV !== 'production') {
   globalThis.__leadflowPrisma = prisma;
 }
 
-// Explicit re-exports. `export *` from @prisma/client does not reliably forward
-// the `Prisma` namespace through every TypeScript module-resolution path - some
-// build environments lose it. Being explicit avoids that.
-export { Prisma, PrismaClient };
-export type {
-  User,
-  Lead,
-  Discussion,
-  Transcription,
-  NotificationLog,
-} from '@prisma/client';
-export { LeadStatus, DiscussionSource } from '@prisma/client';
+// Re-export everything from the generated client so consumers can do:
+//   import { prisma, Prisma, LeadStatus, type Lead } from '@leadflow/db';
+export * from './generated/index.js';
 
+// Sample-data helpers.
 export { createSampleLeadsForUser, buildSampleLeads } from './sample-data.js';
 export type { SampleSeedResult } from './sample-data.js';

@@ -1,4 +1,4 @@
-import { LeadStatus, DiscussionSource } from '@prisma/client';
+import { LeadStatus, DiscussionSource } from './generated/index.js';
 import { prisma } from './index.js';
 
 export type SampleSeedResult = {
