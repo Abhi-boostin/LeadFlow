@@ -7,7 +7,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: pnpm install --frozen-lockfile && pnpm --filter @leadflow/db generate && pnpm --filter @leadflow/db migrate:deploy && pnpm --filter @leadflow/api build
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm --filter @leadflow/db generate && pnpm --filter @leadflow/db migrate:deploy && pnpm --filter @leadflow/api build
     startCommand: pnpm --filter @leadflow/api start
     healthCheckPath: /health
     autoDeploy: true
