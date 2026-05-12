@@ -13,11 +13,10 @@ declare module 'next-auth' {
   }
 }
 
-declare module 'next-auth/jwt' {
-  interface JWT {
-    leadflowId?: string;
-  }
-}
+// JWT augmentation through 'next-auth/jwt' is fragile across bundlers (Next's
+// bundler resolution loses the subpath on some platforms). We carry the custom
+// claim through the token via casts inside the callbacks below.
+type TokenWithLeadflowId = Record<string, unknown> & { leadflowId?: string };
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
@@ -79,19 +78,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
     async jwt({ token, user }) {
       // On first sign-in, look up our internal id and put it in the token.
-      if (user?.email && !token.leadflowId) {
+      const t = token as TokenWithLeadflowId;
+      if (user?.email && !t.leadflowId) {
         const dbUser = await prisma.user.findUnique({
           where: { email: user.email },
           select: { id: true },
         });
-        if (dbUser) token.leadflowId = dbUser.id;
+        if (dbUser) t.leadflowId = dbUser.id;
       }
       return token;
     },
 
     async session({ session, token }) {
-      if (token.leadflowId && session.user) {
-        session.user.id = token.leadflowId;
+      const t = token as TokenWithLeadflowId;
+      if (t.leadflowId && session.user) {
+        session.user.id = t.leadflowId;
       }
       return session;
     },

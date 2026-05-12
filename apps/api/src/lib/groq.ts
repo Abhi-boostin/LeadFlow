@@ -37,8 +37,10 @@ export async function transcribeAudio(
   filename: string,
 ): Promise<{ text: string; duration: number }> {
   const groq = client();
-  // Groq SDK accepts a Web File / Blob for the file parameter.
-  const file = new File([audio], filename, { type: 'audio/webm' });
+  // Groq SDK accepts a Web File / Blob for the file parameter. Wrapping the Buffer
+  // in a fresh Uint8Array avoids Node 22's strict Buffer<ArrayBufferLike> typing
+  // which is not assignable to BlobPart.
+  const file = new File([new Uint8Array(audio)], filename, { type: 'audio/webm' });
   const transcription = await groq.audio.transcriptions.create({
     file,
     model: config.GROQ_TRANSCRIBE_MODEL,
