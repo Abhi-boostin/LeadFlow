@@ -3,13 +3,18 @@
 // Generated client is consumed by apps/api and apps/web through @leadflow/db.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // Output the client into our own source tree (Prisma's official monorepo pattern).
   // Consumers import from `@leadflow/db` which re-exports './generated'. This avoids
   // the @prisma/client shim's pnpm-hoisting issues — under pnpm workspaces the shim
   // can't locate .prisma/client/default reliably on Linux CI machines.
   // https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/generating-prisma-client#using-a-custom-output-path
-  output   = "../src/generated"
+  output        = "../src/generated"
+  // `native` = whatever the build machine runs on (Windows / macOS for local dev).
+  // `rhel-openssl-3.0.x` = Vercel serverless functions (Amazon Linux 2 / RHEL).
+  // Render's Node runtime is Debian-based; the default native binary it generates
+  // there at build time already works.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
