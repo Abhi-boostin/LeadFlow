@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation';
+import { auth } from '@/auth';
 import { LeadListClient } from '@/components/lead-list-client';
 import { apiFetch, ApiError } from '@/lib/api';
 import { LeadStatusSchema } from '@leadflow/shared';
@@ -11,6 +13,7 @@ type ListResponse = { leads: LeadCardData[] };
 
 async function fetchLeads(
   searchParams: SearchParams,
+  userId: string,
 ): Promise<{ leads: LeadCardData[]; error: string | null }> {
   const params = new URLSearchParams();
   if (searchParams.status && searchParams.status !== 'all') {
@@ -20,7 +23,9 @@ async function fetchLeads(
   const qs = params.toString();
 
   try {
-    const data = await apiFetch<ListResponse>(`/api/v1/leads${qs ? `?${qs}` : ''}`);
+    const data = await apiFetch<ListResponse>(`/api/v1/leads${qs ? `?${qs}` : ''}`, {
+      userId,
+    });
     return { leads: data.leads ?? [], error: null };
   } catch (e) {
     const message =
@@ -34,13 +39,15 @@ async function fetchLeads(
 }
 
 export default async function HomePage({ searchParams }: { searchParams: SearchParams }) {
-  const { leads, error } = await fetchLeads(searchParams);
+  const session = await auth();
+  if (!session?.user?.id) redirect('/signin');
+
+  const userId = session.user.id;
+  const { leads, error } = await fetchLeads(searchParams, userId);
 
   const parsedStatus = LeadStatusSchema.safeParse(searchParams.status);
   const initialFilter: FilterValue = parsedStatus.success ? parsedStatus.data : 'all';
 
-  // Render-time reference now. Sent to the client so initial hydration sees the same
-  // value as the SSR pass — eliminates the time-relative hydration mismatch.
   const serverNow = new Date().toISOString();
 
   return (
@@ -50,6 +57,12 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
       initialFilter={initialFilter}
       initialQuery={searchParams.q ?? ''}
       initialNow={serverNow}
+      currentUser={{
+        id: userId,
+        name: session.user.name ?? null,
+        email: session.user.email,
+        image: session.user.image ?? null,
+      }}
     />
   );
 }

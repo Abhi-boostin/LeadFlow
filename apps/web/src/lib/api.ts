@@ -11,6 +11,13 @@ const API_BASE_URL =
 
 const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID || '';
 
+// Module-scope user id for client-side calls. LeadListClient sets this from the session
+// on mount so every browser-initiated fetch carries the signed-in user's id.
+let currentUserId: string | undefined;
+export function setApiUserId(id: string | undefined) {
+  currentUserId = id;
+}
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -21,17 +28,27 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+export interface ApiFetchOptions extends RequestInit {
+  /** Explicit user id, used by Server Components which have access to the session. */
+  userId?: string;
+}
+
+export async function apiFetch<T = unknown>(
+  path: string,
+  init?: ApiFetchOptions,
+): Promise<T> {
   const headers = new Headers(init?.headers);
   const isFormData = init?.body instanceof FormData;
   const hasBody = init?.body !== undefined && init?.body !== null;
   // Only set Content-Type when actually sending a JSON body. Setting it on an empty POST
-  // triggers Fastify's FST_ERR_CTP_EMPTY_JSON_BODY (e.g. the /summarize endpoint takes no body).
+  // triggers Fastify's FST_ERR_CTP_EMPTY_JSON_BODY (e.g. /summarize takes no body).
   // FormData bodies must also let the browser set the multipart boundary automatically.
   if (hasBody && !isFormData && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
   }
-  if (DEV_USER_ID && !headers.has('x-user-id')) headers.set('x-user-id', DEV_USER_ID);
+  // Resolution order: explicit > client-side session > NEXT_PUBLIC_DEV_USER_ID fallback.
+  const userId = init?.userId ?? currentUserId ?? DEV_USER_ID;
+  if (userId && !headers.has('x-user-id')) headers.set('x-user-id', userId);
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,

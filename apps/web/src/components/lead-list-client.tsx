@@ -1,14 +1,23 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Settings as SettingsIcon, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { FilterChips, type FilterValue } from '@/components/filter-chips';
 import { LeadCard, type LeadCardData } from '@/components/lead-card';
 import { LeadTimelineDialog } from '@/components/lead-timeline-dialog';
 import { AddLeadDialog } from '@/components/add-lead-dialog';
 import { SettingsDialog } from '@/components/settings-dialog';
+import { UserMenu } from '@/components/user-menu';
+import { setApiUserId } from '@/lib/api';
 import { isToday, longDate } from '@/lib/format';
+
+export type CurrentUser = {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+};
 
 export function LeadListClient({
   initialLeads,
@@ -16,18 +25,28 @@ export function LeadListClient({
   initialFilter,
   initialQuery,
   initialNow,
+  currentUser,
 }: {
   initialLeads: LeadCardData[];
   initialError: string | null;
   initialFilter: FilterValue;
   initialQuery: string;
   initialNow: string;
+  currentUser: CurrentUser;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Push the signed-in user's id into the API client so every client-side fetch
+  // includes the correct X-User-Id header. Falls back to NEXT_PUBLIC_DEV_USER_ID
+  // only when no real session exists.
+  useEffect(() => {
+    setApiUserId(currentUser.id);
+    return () => setApiUserId(undefined);
+  }, [currentUser.id]);
 
   // Reference time for every relative computation. Starts at server-rendered now (so SSR
   // and hydration agree) then updates after mount and ticks every minute.
@@ -99,24 +118,23 @@ export function LeadListClient({
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Open settings"
-              className="inline-flex h-9 items-center gap-1.5 px-3 font-mono text-[10px] uppercase tracking-label text-ink-mute transition-colors hover:text-ink"
-            >
-              <SettingsIcon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Prefs</span>
-            </button>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setAddOpen(true)}
               className="inline-flex h-9 items-center gap-1.5 bg-ink px-4 font-mono text-[10px] font-medium uppercase tracking-label text-paper transition-colors hover:bg-ink-soft active:translate-y-px"
             >
               <Plus className="h-3.5 w-3.5" />
-              New Lead
+              <span className="hidden sm:inline">New Lead</span>
             </button>
+            <UserMenu
+              user={{
+                name: currentUser.name,
+                email: currentUser.email,
+                image: currentUser.image,
+              }}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
           </div>
         </div>
       </header>
