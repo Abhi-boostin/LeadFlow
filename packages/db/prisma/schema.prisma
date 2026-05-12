@@ -7,8 +7,13 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Runtime queries via Supabase Transaction pooler (port 6543, pgbouncer).
+  url       = env("DATABASE_URL")
+  // Migrations require a direct (non-pooled) connection (port 5432) because
+  // PgBouncer in transaction mode does not support Prisma's migration queries.
+  // Locally `DIRECT_URL` can be unset (falls back to `DATABASE_URL`).
+  directUrl = env("DIRECT_URL")
 }
 
 enum LeadStatus {
