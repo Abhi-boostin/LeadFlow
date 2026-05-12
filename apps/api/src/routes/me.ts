@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { UpdateUserSchema } from '@leadflow/shared';
-import { prisma } from '@leadflow/db';
+import { prisma, createSampleLeadsForUser } from '@leadflow/db';
 
 const USER_SELECT = {
   id: true,
@@ -56,5 +56,34 @@ export async function meRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ user });
+  });
+
+  // POST /api/v1/me/seed - one-shot demo seed for the current user.
+  // Refuses if the user already has leads (re-seeding requires deleting first).
+  app.post('/api/v1/me/seed', async (request, reply) => {
+    const userId = request.userId;
+
+    const existing = await prisma.lead.count({ where: { userId } });
+    if (existing > 0) {
+      return reply.status(409).send({
+        error: {
+          code: 'ALREADY_SEEDED',
+          message: `You already have ${existing} lead${existing === 1 ? '' : 's'}. Delete them first to re-seed.`,
+        },
+      });
+    }
+
+    try {
+      const result = await createSampleLeadsForUser(userId);
+      return reply.status(201).send(result);
+    } catch (err) {
+      request.log.error({ err }, 'Sample seed failed');
+      return reply.status(500).send({
+        error: {
+          code: 'SEED_FAILED',
+          message: err instanceof Error ? err.message : 'Seed failed',
+        },
+      });
+    }
   });
 }

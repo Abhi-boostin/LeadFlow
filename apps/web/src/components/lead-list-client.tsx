@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, X } from 'lucide-react';
+import { Loader2, Plus, Search, Sparkles, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { FilterChips, type FilterValue } from '@/components/filter-chips';
 import { LeadCard, type LeadCardData } from '@/components/lead-card';
@@ -9,7 +10,7 @@ import { LeadTimelineDialog } from '@/components/lead-timeline-dialog';
 import { AddLeadDialog } from '@/components/add-lead-dialog';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { UserMenu } from '@/components/user-menu';
-import { setApiUserId } from '@/lib/api';
+import { apiFetch, setApiUserId } from '@/lib/api';
 import { isToday, longDate } from '@/lib/format';
 
 export type CurrentUser = {
@@ -39,6 +40,8 @@ export function LeadListClient({
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [seeding, setSeeding] = useState(false);
+  const [, startTransition] = useTransition();
 
   // Push the signed-in user's id into the API client so every client-side fetch
   // includes the correct X-User-Id header. Falls back to NEXT_PUBLIC_DEV_USER_ID
@@ -81,6 +84,23 @@ export function LeadListClient({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  const handleSeed = async () => {
+    if (seeding) return;
+    setSeeding(true);
+    try {
+      const result = await apiFetch<{ leadCount: number; discussionCount: number }>(
+        '/api/v1/me/seed',
+        { method: 'POST' },
+      );
+      toast.success(`Loaded ${result.leadCount} leads & ${result.discussionCount} discussions`);
+      startTransition(() => router.refresh());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load sample data');
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const handleFilter = (value: FilterValue) => {
     const params = new URLSearchParams();
@@ -197,8 +217,35 @@ export function LeadListClient({
             <p className="mt-3 text-sm text-ink-mute">
               {hasFilter
                 ? 'Loosen your filter, or clear the search to see everyone.'
-                : 'Click + New Lead to add your first one.'}
+                : 'Add your first lead, or load a sample set to explore the app.'}
             </p>
+
+            {!hasFilter && (
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAddOpen(true)}
+                  className="inline-flex h-10 items-center gap-2 bg-ink px-5 font-mono text-[10px] font-medium uppercase tracking-label text-paper transition-colors hover:bg-ink-soft"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add a lead
+                </button>
+                <span className="font-display italic text-sm text-ink-mute">or</span>
+                <button
+                  type="button"
+                  onClick={handleSeed}
+                  disabled={seeding}
+                  className="inline-flex h-10 items-center gap-2 border border-line bg-paper px-5 font-mono text-[10px] font-medium uppercase tracking-label text-ink transition-colors hover:border-ink hover:bg-paper-subtle disabled:opacity-50"
+                >
+                  {seeding ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  {seeding ? 'Loading sample data…' : 'Load 8 sample leads'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
