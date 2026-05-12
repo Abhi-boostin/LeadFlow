@@ -250,7 +250,12 @@ async function main() {
 
   const leadCount = await prisma.lead.count({ where: { userId: user.id } });
   const discussionCount = await prisma.discussion.count({ where: { userId: user.id } });
+  console.log('');
   console.log(`Seed complete: ${leadCount} leads, ${discussionCount} discussions for ${demoEmail}`);
+  console.log('');
+  console.log(`Demo user id (paste into NEXT_PUBLIC_DEV_USER_ID in .env):`);
+  console.log(`  ${user.id}`);
+  console.log('');
 }
 
 main()
