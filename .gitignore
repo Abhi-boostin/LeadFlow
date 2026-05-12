@@ -44,6 +44,9 @@ prisma/migrations/dev.db*
 *.sqlite
 *.sqlite-journal
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Coverage and tests
 coverage/
 *.lcov
